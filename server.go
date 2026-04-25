@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
@@ -57,6 +58,26 @@ func (this *Server) Handler(conn net.Conn) {
 	this.mapLock.Unlock()
 
 	this.BroadCast(user, "已上线")
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := conn.Read(buf)
+			if n == 0 {
+				this.BroadCast(user, "已下线")
+				this.mapLock.Lock()
+				delete(this.OnlineMap, user.Name)
+				this.mapLock.Unlock()
+				return
+			}
+			if err != nil && err != io.EOF {
+				fmt.Println("Conn read err:", err)
+				return
+			}
+			msg := string(buf[:n-1])
+			this.BroadCast(user, msg)
+		}
+	}()
 
 	// 阻塞
 	select {}
