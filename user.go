@@ -1,6 +1,9 @@
 package main
 
-import "net"
+import (
+	"net"
+	"strings"
+)
 
 type User struct {
 	Name   string
@@ -43,8 +46,35 @@ func (this *User) Offline() {
 	this.server.BroadCast(this, "已下线")
 }
 
+func (this *User) SendMsg(msg string) {
+	this.conn.Write([]byte(msg))
+}
+
 func (this *User) DoMessage(msg string) {
-	this.server.BroadCast(this, msg)
+	if msg == "who" {
+		this.server.mapLock.Lock()
+		for _, user := range this.server.OnlineMap {
+			onlineMsg := "[" + user.Addr + "]" + ":" + "在线...\n"
+			this.SendMsg(onlineMsg)
+		}
+		this.server.mapLock.Unlock()
+
+	} else if len(msg) > 7 && msg[:7] == "rename|" {
+		newName := strings.Split(msg, "|")[1]
+		this.server.mapLock.Lock()
+		if _, ok := this.server.OnlineMap[newName]; ok {
+			this.server.mapLock.Unlock()
+			this.SendMsg("当前用户名被使用\n")
+			return
+		}
+		delete(this.server.OnlineMap, this.Name)
+		this.server.OnlineMap[newName] = this
+		this.server.mapLock.Unlock()
+		this.Name = newName
+		this.SendMsg("您已更新用户名：" + this.Name + "\n")
+	} else {
+		this.server.BroadCast(this, msg)
+	}
 }
 
 // 监听并发送消息到对应客户端
